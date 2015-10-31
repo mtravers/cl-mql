@@ -1,7 +1,6 @@
 (in-package :cl-user)
 
-(defvar *freebase-host* "api.freebase.com") 
-(defvar *freebase-readservice* "/api/service/mqlread")   ; Path to mqlread service
+(defvar *freebase-host* "https://www.googleapis.com/freebase/v1/") 
 
 (defvar *mql-debug* nil)
 
@@ -17,8 +16,16 @@
     (string thing)
     (symbol (string-downcase (symbol-name thing)))))
 
-(defun mql-assocdr (property response)
-  (mt:assocdr (stringify property) response :test #'equal))
+(defun mql-prop-eql (a b)
+  (or (eq a b)
+      (equal a b)
+      (equal (mt:fast-string a) (mt:fast-string b))))
+
+(defmacro mql-assocdr (property response)
+  `(mt:assocdr
+    ,property
+    ,response
+   :test #'mql-prop-eql))
 
 (defun decode-json-from-string-stringily (json-string)
   (let ((json:*identifier-name-to-key* #'identity)
@@ -30,8 +37,8 @@
   `(("query" . (,q))))
 
 (defun mql-read (q)
-  (let* ((json (json:encode-json-to-string (query-envelope q)))
-	 (url (format nil "https://~A~A" *freebase-host* *freebase-readservice*))
+  (let* ((json (json:encode-json-to-string q))
+	 (url (format nil "~A~A" *freebase-host* "mqlread"))
 	 response)
     (when *mql-debug*
       (terpri)
@@ -40,8 +47,7 @@
 	  (decode-json-from-string-stringily
 	   (coerce-to-string (drakma:http-request url :parameters `(("query" . ,json) )))
 	   ))
-    (unless (equal "/api/status/ok" (mql-assocdr "code" response))
-      (error "MQL error ~A" response))
+    ;; +++ HTTP error checking needed
     (when *mql-debug*
       (terpri)
       (print response))
