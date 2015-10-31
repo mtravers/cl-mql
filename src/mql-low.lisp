@@ -1,7 +1,7 @@
 (in-package :cl-user)
 
 (defvar *freebase-host* "https://www.googleapis.com/freebase/v1/") 
-
+(defvar *freebase-api-key* nil) ; add your own
 (defvar *mql-debug* nil)
 
 (defun coerce-to-string (ss)
@@ -33,9 +33,6 @@
     (json:decode-json-from-string json-string)
     ))
 
-(defun query-envelope (q)
-  `(("query" . (,q))))
-
 (defun mql-read (q)
   (let* ((json (json:encode-json-to-string q))
 	 (url (format nil "~A~A" *freebase-host* "mqlread"))
@@ -43,12 +40,18 @@
     (when *mql-debug*
       (terpri)
       (princ json))
-    (setq response
-	  (decode-json-from-string-stringily
-	   (coerce-to-string (drakma:http-request url :parameters `(("query" . ,json) )))
-	   ))
+    (multiple-value-bind (body code)
+	(drakma:http-request url :parameters `(("query" . ,json)
+					       ("key" . ,*freebase-api-key*)
+					       ))
+      (unless (= code 200)
+	(error (format nil "Unexpected response: ~A: ~A" code (coerce-to-string body))))
+      (setq response
+	    (decode-json-from-string-stringily
+	     (coerce-to-string body)
+	     ))
     ;; +++ HTTP error checking needed
-    (when *mql-debug*
-      (terpri)
-      (print response))
-    (mql-assocdr "result" response)))
+      (when *mql-debug*
+	(terpri)
+	(print response))
+      (mql-assocdr "result" response))))
